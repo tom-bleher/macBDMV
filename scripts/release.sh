@@ -113,5 +113,10 @@ fi
 
 gh release create $tag $dmg $dmg.sha256 $appcast --target $(git rev-parse HEAD) \
     --title "macBDMV $version" --notes-file $tmp/notes.md
-curl -fsSL $feed_url -o $tmp/live.xml && cmp -s $appcast $tmp/live.xml || die "the live feed differs from the generated one"
+# GitHub's latest-release redirect takes a little while to move to the new release.
+for attempt in {1..30}; do
+    curl -fsSL $feed_url -o $tmp/live.xml 2>/dev/null && cmp -s $appcast $tmp/live.xml && break
+    (( attempt < 30 )) || die "the live feed still differs from the generated one after 5 minutes"
+    sleep 10
+done
 print "Published $tag: https://github.com/$repo/releases/tag/$tag"
