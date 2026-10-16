@@ -20,7 +20,7 @@ scripts/build_app.sh --install  # also copies it to /Applications
 Drop a folder on the window or Dock icon (or `open -a macBDMV <folder>`). It can be a disc (`…/BDMV`), the folder above it, or a folder of several discs (`DISC01`, `DISC02`, …).
 
 1. Every playlist is scanned. Playlists that use the same clips are merged into one row, and clips under 2 minutes are hidden unless you tick **Show short clips**.
-2. Titles at least half as long as the longest one are marked **Main Feature** and selected. If there are several (a multi-part film), they become `Name - pt1`, `pt2`, ….
+2. The longest title is selected as the **Main Feature**. Other titles at least half as long that share none of its clips (a film split across discs) are selected too and named `Name - pt1`, `pt2`, …. Alternate cuts that reuse the feature's clips are left unselected.
 3. Tick any extras you want and give each a type and name. Pick a title to choose which of its tracks to keep.
 4. Choose an output folder and click **Remux**.
 
@@ -38,13 +38,12 @@ Movie (Year)/
 - Audio tracks are named like `Russian - DTS-HD MA 5.1`.
 - The first audio track you keep is the default.
 - If that track isn't in your system language, a subtitle track in your language is made the default.
-- Forced subtitle tracks keep the forced flag.
 - Dolby Vision enhancement layers are merged by mkvmerge automatically.
 
 **While remuxing:**
 - Each file is written as `*.mkv.part` and renamed only after mkvmerge succeeds.
 - Existing files are never overwritten.
-- Cancelling deletes the partial file.
+- Cancelling or quitting deletes the partial file.
 
 ## Limitations
 

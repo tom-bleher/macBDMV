@@ -29,7 +29,7 @@ enum Remuxer {
 
         // Subtitles default on only when the primary audio isn't in the user's language.
         let needsSubs = audio.first.map { !Language.same($0.language, Language.preferred) } ?? false
-        let defaultSub = needsSubs ? subs.first { !$0.forced && Language.same($0.language, Language.preferred) } : nil
+        let defaultSub = needsSubs ? subs.first { Language.same($0.language, Language.preferred) } : nil
 
         for t in audio {
             args += ["--track-name", "\(t.id):\(t.displayName)",
@@ -38,7 +38,6 @@ enum Remuxer {
         for t in subs {
             args += ["--track-name", "\(t.id):\(t.displayName)",
                      "--default-track-flag", "\(t.id):\(t.id == defaultSub?.id ? 1 : 0)"]
-            if t.forced { args += ["--forced-display-flag", "\(t.id):1"] }
         }
         return args + [title.playlistURL.path]
     }

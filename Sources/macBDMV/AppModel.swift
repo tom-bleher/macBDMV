@@ -20,6 +20,7 @@ final class AppModel {
     }
 
     private var process: Process?
+    private var partFile: URL?
     private var cancelled = false
 
     var visibleTitles: [Title] { showShortClips ? titles : titles.filter { $0.duration >= Self.shortClip || $0.selected } }
@@ -28,7 +29,9 @@ final class AppModel {
     var movieFolder: URL { outputDir.appending(path: safe(movieName), directoryHint: .isDirectory) }
 
     var freeBytes: Int64? {
-        let v = try? outputDir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+        var dir = outputDir
+        while !FileManager.default.fileExists(atPath: dir.path), dir.pathComponents.count > 1 { dir.deleteLastPathComponent() }
+        let v = try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
         return v?.volumeAvailableCapacityForImportantUsage ?? v?.volumeAvailableCapacity.map(Int64.init)
     }
 
@@ -52,13 +55,19 @@ final class AppModel {
         return titles.filter { $0.duration > longest * 0.98 }.count >= 4
     }
 
+    /// Every queued title needs its own non-empty file name.
+    var namesClash: Bool {
+        let names = queue.map { outputURL(for: $0).path.lowercased() }
+        return queue.contains { safe($0.name).isEmpty } || Set(names).count != names.count
+    }
+
     var canStart: Bool {
-        !running && !scanning && !queue.isEmpty && encryptedDiscs.isEmpty && !movieName.isEmpty
+        !running && !scanning && !queue.isEmpty && encryptedDiscs.isEmpty && !movieName.isEmpty && !namesClash
             && requiredBytes < (freeBytes ?? .max)
     }
 
     func open(_ url: URL) async {
-        guard let mkvmerge, !running else { return }
+        guard let mkvmerge, !running, !scanning else { return }
         let roots = Scanner.discRoots(in: url)
         guard !roots.isEmpty else {
             alert = "No BDMV folder found in “\(url.lastPathComponent)”."
@@ -78,19 +87,15 @@ final class AppModel {
             found += discTitles
         }
 
-        // Everything at least half as long as the longest title is treated as (a part of) the feature.
-        let longest = found.map(\.duration).max() ?? 0
-        for i in found.indices {
-            let isMain = found[i].duration >= longest / 2
-            found[i].kind = isMain ? .main : .other
-            found[i].selected = isMain
-            if !isMain { found[i].name = [found[i].disc, found[i].playlist].filter { !$0.isEmpty }.joined(separator: " ") }
-        }
+        Scanner.markFeatures(&found)
         func order(_ t: Title) -> (String, Int, String) { (t.disc, t.kind == .main ? 0 : 1, t.playlist) }
         titles = found.sorted { order($0) < order($1) }
         selection = titles.first?.id
         scanning = false
-        if titles.isEmpty { alert = "No playable titles found." }
+        if titles.isEmpty {
+            alert = encryptedDiscs.isEmpty ? "No playable titles found."
+                : "This disc is still AACS-encrypted. Make a decrypted backup with MakeMKV first."
+        }
     }
 
     func start() async {
@@ -112,6 +117,8 @@ final class AppModel {
             }
             try? FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
             let part = dest.appendingPathExtension("part")
+            partFile = part
+            defer { partFile = nil }
             update(id) { $0.state = .running(0) }
 
             let (status, messages) = await run(mkvmerge, Remuxer.arguments(for: title, output: part)) { p in
@@ -131,6 +138,13 @@ final class AppModel {
     func cancel() {
         cancelled = true
         process?.terminate()
+    }
+
+    /// Called on quit: stop mkvmerge and remove its partial output. No waiting — Process can't observe the exit
+    /// while the app terminates, and SIGTERM ends mkvmerge without it reopening the unlinked file.
+    func shutdown() {
+        cancel()
+        if let partFile { try? FileManager.default.removeItem(at: partFile) }
     }
 
     func outputURL(for title: Title) -> URL {

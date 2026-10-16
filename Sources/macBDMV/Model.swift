@@ -7,21 +7,16 @@ struct Track: Identifiable, Hashable {
     let language: String  // ISO 639-2, "und" when unknown
     let channels: Int?
     let resolution: String?
-    let forced: Bool
     var keep = true
 
-    var detail: String {
-        if let resolution { return resolution }
-        if let channels { return Track.layout(channels) }
-        return forced ? "Forced" : ""
-    }
+    var detail: String { resolution ?? channels.map(Track.layout) ?? "" }
 
     /// Track name written into the MKV, e.g. "English - DTS-HD MA 5.1".
     var displayName: String {
         let lang = language == "und" ? nil : Language.name(language)
         switch type {
         case "audio": return [lang, "\(Track.shortCodec(codec)) \(detail)"].compactMap { $0 }.joined(separator: " - ")
-        case "subtitles": return (lang ?? "Subtitles") + (forced ? " (Forced)" : "")
+        case "subtitles": return lang ?? "Subtitles"
         default: return ""
         }
     }

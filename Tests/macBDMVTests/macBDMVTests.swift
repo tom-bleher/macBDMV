@@ -13,21 +13,21 @@ func movieName(path: String, expected: String) {
 }
 
 @Test func trackNames() {
-    let dts = Track(id: 1, type: "audio", codec: "DTS-HD Master Audio", language: "rus", channels: 6, resolution: nil, forced: false)
-    let sub = Track(id: 2, type: "subtitles", codec: "HDMV PGS", language: "ger", channels: nil, resolution: nil, forced: true)
+    let dts = Track(id: 1, type: "audio", codec: "DTS-HD Master Audio", language: "rus", channels: 6, resolution: nil)
+    let sub = Track(id: 2, type: "subtitles", codec: "HDMV PGS", language: "ger", channels: nil, resolution: nil)
     #expect(dts.displayName == "Russian - DTS-HD MA 5.1")
-    #expect(sub.displayName == "German (Forced)")
-    let und = Track(id: 3, type: "audio", codec: "TrueHD Atmos", language: "und", channels: 8, resolution: nil, forced: false)
+    #expect(sub.displayName == "German")
+    let und = Track(id: 3, type: "audio", codec: "TrueHD Atmos", language: "und", channels: 8, resolution: nil)
     #expect(und.displayName == "TrueHD Atmos 7.1")
 }
 
 @Test func foreignAudioGetsDefaultSubtitles() {
     let t = Title(playlistURL: URL(filePath: "/d/BDMV/PLAYLIST/00001.mpls"), disc: "", duration: 1, size: 1, chapters: 1, clips: [],
                   tracks: [
-                      Track(id: 0, type: "video", codec: "HEVC/H.265/MPEG-H", language: "und", channels: nil, resolution: "3840x2160", forced: false),
-                      Track(id: 1, type: "audio", codec: "AC-3", language: "rus", channels: 6, resolution: nil, forced: false),
-                      Track(id: 2, type: "audio", codec: "AC-3", language: "eng", channels: 2, resolution: nil, forced: false, keep: false),
-                      Track(id: 3, type: "subtitles", codec: "HDMV PGS", language: "eng", channels: nil, resolution: nil, forced: false),
+                      Track(id: 0, type: "video", codec: "HEVC/H.265/MPEG-H", language: "und", channels: nil, resolution: "3840x2160"),
+                      Track(id: 1, type: "audio", codec: "AC-3", language: "rus", channels: 6, resolution: nil),
+                      Track(id: 2, type: "audio", codec: "AC-3", language: "eng", channels: 2, resolution: nil, keep: false),
+                      Track(id: 3, type: "subtitles", codec: "HDMV PGS", language: "eng", channels: nil, resolution: nil),
                   ])
     let args = Remuxer.arguments(for: t, output: URL(filePath: "/o.mkv")).joined(separator: " ")
     #expect(args.contains("--audio-tracks 1 "))
@@ -55,6 +55,24 @@ let testDisc = ProcessInfo.processInfo.environment["BDMV_TEST_DISC"]
     #expect(!files.contains { $0.hasSuffix(".part") })
     #expect(!model.running)
     #expect(model.titles.allSatisfy { $0.state == .idle || $0.state == .done }, "\(model.titles.map(\.state))")
+}
+
+@Test(.enabled(if: testDisc != nil))
+@MainActor func flagsEncryptedDisc() async throws {
+    let copy = FileManager.default.temporaryDirectory.appending(path: "macBDMV-enc-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: copy) }
+    try FileManager.default.copyItem(at: URL(filePath: testDisc!), to: copy)
+    let streams = try FileManager.default.contentsOfDirectory(at: copy.appending(path: "BDMV/STREAM"), includingPropertiesForKeys: nil)
+    for m2ts in streams {
+        let fh = try FileHandle(forUpdating: m2ts)
+        try fh.seek(toOffset: 16)
+        try fh.write(contentsOf: Data((0..<6128).map { _ in UInt8.random(in: 0...255) }))
+        try fh.close()
+    }
+    let model = AppModel()
+    await model.open(copy)
+    #expect(!model.encryptedDiscs.isEmpty)
+    #expect(!model.canStart)
 }
 
 @Test(.enabled(if: testDisc != nil))
@@ -93,6 +111,22 @@ let testDisc = ProcessInfo.processInfo.environment["BDMV_TEST_DISC"]
     let audio = zip(tracks, props).filter { $0.0["type"] as? String == "audio" }.map(\.1)
     #expect(audio.filter { $0["default_track"] as? Bool == true }.count == 1)
     #expect(audio.allSatisfy { ($0["track_name"] as? String)?.contains(" - ") == true })
+}
+
+@Test func featureSelection() {
+    func title(_ n: String, _ minutes: Double, _ clips: [String], disc: String = "") -> Title {
+        Title(playlistURL: URL(filePath: "/d/\(n).mpls"), disc: disc, duration: minutes * 60, size: 1, chapters: 1, clips: clips, tracks: [])
+    }
+    var titles = [
+        title("00001", 120, ["a", "b"]),               // theatrical cut
+        title("00002", 130, ["a", "x", "b"]),          // extended cut: longest, wins
+        title("00003", 100, ["c", "d"], disc: "D2"),   // part two on another disc
+        title("00800", 20, ["e"]),                     // extra
+    ]
+    Scanner.markFeatures(&titles)
+    #expect(titles.map(\.selected) == [false, true, true, false])
+    #expect(titles.map(\.kind) == [.other, .main, .main, .other])
+    #expect(titles[3].name == "00800")
 }
 
 @Test func detectsEncryptedStream() throws {

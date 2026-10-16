@@ -16,7 +16,7 @@ struct MacBDMVApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("Open Blu-ray Folder…") { openPanel(model) }
                     .keyboardShortcut("o")
-                    .disabled(model.running)
+                    .disabled(model.running || model.scanning)
             }
         }
     }
@@ -38,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationWillTerminate(_ notification: Notification) { model.shutdown() }
 }
 
 @MainActor

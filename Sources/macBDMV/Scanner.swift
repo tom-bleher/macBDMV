@@ -61,6 +61,21 @@ enum Scanner {
         return false
     }
 
+    /// The longest title is the feature. Other titles at least half as long are further parts (multi-part
+    /// films, one per disc) only if they share no clips with it; otherwise they are alternate cuts.
+    static func markFeatures(_ titles: inout [Title]) {
+        let longest = titles.map(\.duration).max() ?? 0
+        var featureClips = Set<String>()
+        for i in titles.indices.sorted(by: { titles[$0].duration > titles[$1].duration }) {
+            let clips = Set(titles[i].clips)
+            let isMain = titles[i].duration >= longest / 2 && featureClips.isDisjoint(with: clips)
+            if isMain { featureClips.formUnion(clips) }
+            titles[i].kind = isMain ? .main : .other
+            titles[i].selected = isMain
+            if !isMain { titles[i].name = [titles[i].disc, titles[i].playlist].filter { !$0.isEmpty }.joined(separator: " ") }
+        }
+    }
+
     static func scan(root: URL, label: String, mkvmerge: URL) async -> (Disc, [Title]) {
         let playlists = ((try? FileManager.default.contentsOfDirectory(
             at: root.appending(path: "BDMV/PLAYLIST"), includingPropertiesForKeys: nil)) ?? [])
@@ -92,9 +107,11 @@ enum Scanner {
             }
         }
 
-        let encrypted = unique.max { $0.size < $1.size }
-            .flatMap { $0.clips.first }
-            .map { isEncrypted(URL(filePath: $0)) } ?? false
+        // mkvmerge can't identify encrypted playlists, so check the largest stream file directly.
+        let streams = (try? FileManager.default.contentsOfDirectory(
+            at: root.appending(path: "BDMV/STREAM"), includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        func size(_ u: URL) -> Int { (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0 }
+        let encrypted = streams.max { size($0) < size($1) }.map(isEncrypted) ?? false
         return (Disc(root: root, label: label, encrypted: encrypted), unique)
     }
 
@@ -105,8 +122,7 @@ enum Scanner {
         else { return nil }
         let tracks = (id.tracks ?? []).map { t in
             Track(id: t.id, type: t.type, codec: t.codec, language: t.properties.language ?? "und",
-                  channels: t.properties.audioChannels, resolution: t.properties.pixelDimensions,
-                  forced: t.properties.forcedTrack ?? false)
+                  channels: t.properties.audioChannels, resolution: t.properties.pixelDimensions)
         }
         return Title(playlistURL: playlist, disc: disc, duration: Double(p.playlistDuration ?? 0) / 1e9,
                      size: p.playlistSize ?? 0, chapters: p.playlistChapters ?? 0, clips: files, tracks: tracks)
@@ -132,7 +148,6 @@ enum Scanner {
                 let language: String?
                 let audioChannels: Int?
                 let pixelDimensions: String?
-                let forcedTrack: Bool?
             }
             let id: Int
             let type: String

@@ -25,7 +25,7 @@ struct ContentView: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first, !model.running else { return false }
+            guard let url = urls.first, !model.running, !model.scanning else { return false }
             Task { await model.open(url) }
             return true
         }
@@ -52,6 +52,10 @@ private struct DiscView: View {
             ForEach(model.encryptedDiscs, id: \.root) { disc in
                 Banner(text: "\(disc.label.isEmpty ? "This disc" : disc.label) is still AACS-encrypted. Make a decrypted backup with MakeMKV first.",
                        systemImage: "lock.fill", color: .red)
+            }
+            if model.namesClash {
+                Banner(text: "Two selected titles would be written to the same file, or a name is empty.",
+                       systemImage: "exclamationmark.triangle.fill", color: .orange)
             }
             if model.looksObfuscated {
                 Banner(text: "Several playlists share the feature's length — this disc may use playlist obfuscation. Check runtime and chapters before remuxing.",
