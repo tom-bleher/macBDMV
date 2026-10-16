@@ -5,6 +5,7 @@ let package = Package(
     name: "macBDMV",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "macBDMV", path: "Sources/macBDMV")
+        .executableTarget(name: "macBDMV", path: "Sources/macBDMV"),
+        .testTarget(name: "macBDMVTests", dependencies: ["macBDMV"], path: "Tests/macBDMVTests"),
     ]
 )
