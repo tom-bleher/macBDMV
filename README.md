@@ -56,3 +56,7 @@ Movie (Year)/
 swift test                                   # unit tests
 BDMV_TEST_DISC=/path/to/disc swift test      # + end-to-end remux of a real BDMV folder
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
