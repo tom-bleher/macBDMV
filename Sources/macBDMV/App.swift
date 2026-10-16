@@ -4,7 +4,7 @@ import SwiftUI
 @main
 struct MacBDMVApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
-    @State private var model = AppModel()
+    private var model: AppModel { delegate.model }
 
     var body: some Scene {
         Window("macBDMV", id: "main") {
@@ -22,7 +22,16 @@ struct MacBDMVApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let model = AppModel()
+
+    /// Folders dropped on the Dock icon or opened with `open -a macBDMV <folder>`.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        Task { await model.open(url) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)  // needed when launched via `swift run`
         NSApp.activate()
