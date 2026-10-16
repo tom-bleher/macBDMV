@@ -179,9 +179,9 @@ private struct Footer: View {
             Button {
                 if let url = chooseFolder(prompt: "Choose") { model.outputDir = url }
             } label: {
-                Label(model.outputDir.path(percentEncoded: false).replacing(NSHomeDirectory(), with: "~"),
-                      systemImage: "folder")
+                Label(model.outputDir.lastPathComponent, systemImage: "folder")
             }
+            .help(model.outputDir.path(percentEncoded: false))
             .disabled(model.running)
             Text("\(model.requiredBytes.formatted(.byteCount(style: .file))) needed · \((free ?? 0).formatted(.byteCount(style: .file))) free")
                 .foregroundStyle(short ? .red : .secondary)

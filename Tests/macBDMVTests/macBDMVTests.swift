@@ -17,6 +17,8 @@ func movieName(path: String, expected: String) {
     let sub = Track(id: 2, type: "subtitles", codec: "HDMV PGS", language: "ger", channels: nil, resolution: nil, forced: true)
     #expect(dts.displayName == "Russian - DTS-HD MA 5.1")
     #expect(sub.displayName == "German (Forced)")
+    let und = Track(id: 3, type: "audio", codec: "TrueHD Atmos", language: "und", channels: 8, resolution: nil, forced: false)
+    #expect(und.displayName == "TrueHD Atmos 7.1")
 }
 
 @Test func foreignAudioGetsDefaultSubtitles() {
@@ -34,9 +36,30 @@ func movieName(path: String, expected: String) {
 }
 
 /// End-to-end against a real BDMV folder: `BDMV_TEST_DISC=/path swift test`.
-@Test(.enabled(if: ProcessInfo.processInfo.environment["BDMV_TEST_DISC"] != nil))
+let testDisc = ProcessInfo.processInfo.environment["BDMV_TEST_DISC"]
+
+@Test(.enabled(if: testDisc != nil))
+@MainActor func cancelLeavesNoPartialFiles() async throws {
+    let out = FileManager.default.temporaryDirectory.appending(path: "macBDMV-test-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: out) }
+    let model = AppModel()
+    model.outputDir = out
+    await model.open(URL(filePath: testDisc!))
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+
+    let run = Task { await model.start() }
+    try await Task.sleep(for: .milliseconds(150))
+    model.cancel()
+    await run.value
+    let files = FileManager.default.enumerator(atPath: out.path)?.allObjects as? [String] ?? []
+    #expect(!files.contains { $0.hasSuffix(".part") })
+    #expect(!model.running)
+    #expect(model.titles.allSatisfy { $0.state == .idle || $0.state == .done }, "\(model.titles.map(\.state))")
+}
+
+@Test(.enabled(if: testDisc != nil))
 @MainActor func remuxDisc() async throws {
-    let disc = URL(filePath: ProcessInfo.processInfo.environment["BDMV_TEST_DISC"]!)
+    let disc = URL(filePath: testDisc!)
     let out = FileManager.default.temporaryDirectory.appending(path: "macBDMV-test-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: out) }
 

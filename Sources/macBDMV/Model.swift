@@ -18,10 +18,10 @@ struct Track: Identifiable, Hashable {
 
     /// Track name written into the MKV, e.g. "English - DTS-HD MA 5.1".
     var displayName: String {
-        let lang = Language.name(language)
+        let lang = language == "und" ? nil : Language.name(language)
         switch type {
-        case "audio": return "\(lang) - \(Track.shortCodec(codec)) \(detail)"
-        case "subtitles": return forced ? "\(lang) (Forced)" : lang
+        case "audio": return [lang, "\(Track.shortCodec(codec)) \(detail)"].compactMap { $0 }.joined(separator: " - ")
+        case "subtitles": return (lang ?? "Subtitles") + (forced ? " (Forced)" : "")
         default: return ""
         }
     }
@@ -90,6 +90,7 @@ enum Language {
     ]
 
     static func name(_ code: String) -> String {
+        if code == "und" { return "—" }
         let code = bibliographic[code] ?? code
         return Locale(identifier: "en").localizedString(forLanguageCode: code) ?? code
     }
