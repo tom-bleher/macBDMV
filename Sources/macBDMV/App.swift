@@ -13,6 +13,10 @@ struct MacBDMVApp: App {
                 .frame(minWidth: 860, minHeight: 540)
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { SoftwareUpdate.shared.checkForUpdates() }
+                    .disabled(!SoftwareUpdate.shared.canCheckForUpdates)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Open Blu-ray Folder…") { openPanel(model) }
                     .keyboardShortcut("o")
@@ -35,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)  // needed when launched via `swift run`
         NSApp.activate()
+        _ = SoftwareUpdate.shared  // starts Sparkle's scheduled checks
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
